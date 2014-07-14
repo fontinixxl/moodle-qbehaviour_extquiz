@@ -30,7 +30,7 @@
  */
 defined('MOODLE_INTERNAL') || die();
 
-class qbehaviour_extquiz extends question_behaviour {
+class qbehaviour_extquiz extends question_behaviour_with_save {
 
 const IS_ARCHETYPAL = true;
 
