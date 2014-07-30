@@ -32,7 +32,7 @@ defined('MOODLE_INTERNAL') || die();
 
 class qbehaviour_extquiz extends question_behaviour_with_save {
 
-const IS_ARCHETYPAL = true;
+    const IS_ARCHETYPAL = true;
 
     /**
      * Special value used for {@link question_display_options::$readonly when
@@ -52,22 +52,13 @@ const IS_ARCHETYPAL = true;
         return $this->question->get_right_answer_summary();
     }
 
-    /**
-     * @return bool are we are currently in the try_again state.
-     */
-    protected function is_try_again_state() {
-        $laststep = $this->qa->get_last_step();
-        $remainingattempts = $this->get_remaining_attempts();
-        return $this->qa->get_state()->is_active() && $laststep->has_behaviour_var('submit') &&
-                $remainingattempts >= 1;
-    }
-
     public function adjust_display_options(question_display_options $options) {
+
         // We only need different behaviour in try again states.
-        if (!$this->is_try_again_state()) {
-            parent::adjust_display_options($options);
-            return;
-        }
+        /* if (!$this->is_try_again_state()) {
+          parent::adjust_display_options($options);
+          return;
+          } */
         /*
           // Let the hint adjust the options.
           $hint = $this->get_applicable_hint();
@@ -78,43 +69,23 @@ const IS_ARCHETYPAL = true;
         // Now call the base class method, but protect some fields from being overwritten.
         $save = clone($options);
         parent::adjust_display_options($options);
-        $options->feedback = $save->feedback;
-        $options->numpartscorrect = $save->numpartscorrect;
 
-        // In a try-again state, everything except the try again button
-        // Should be read-only. This is a mild hack to achieve this.
-        if (!$options->readonly) {
-            $options->readonly = self::READONLY_EXCEPT_TRY_AGAIN;
+        // Then, if they have just Checked an answer, show them the applicable bits of feedback.
+        if (!$this->qa->get_state()->is_finished() &&
+                $this->qa->get_last_behaviour_var('_try')) {
+            $options->feedback = $save->feedback;
+            $options->correctness = $save->correctness;
+            $options->numpartscorrect = $save->numpartscorrect;
         }
-    }
-
-    public function get_applicable_hint() {
-        if (!$this->is_try_again_state()) {
-            return null;
-        }
-        return $this->question->get_hint(count($this->question->hints) -
-                        $this->qa->get_last_behaviour_var('_triesleft'), $this->qa);
     }
 
     public function get_expected_data() {
-        if ($this->is_try_again_state()) {
-            return array(
-                'tryagain' => PARAM_BOOL,
-            );
-        } else if ($this->qa->get_state()->is_active()) {
+        if ($this->qa->get_state()->is_active()) {
             return array(
                 'submit' => PARAM_BOOL,
             );
         }
         return parent::get_expected_data();
-    }
-
-    public function get_expected_qt_data() {
-        $hint = $this->get_applicable_hint();
-        if (!empty($hint->clearwrong)) {
-            return $this->question->get_expected_data();
-        }
-        return parent::get_expected_qt_data();
     }
 
     public function get_state_string($showcorrectness) {
@@ -123,38 +94,34 @@ const IS_ARCHETYPAL = true;
             return parent::get_state_string($showcorrectness);
         }
 
-        if ($this->is_try_again_state()) {
-            return get_string('notcomplete', 'qbehaviour_interactive');
-        } else {
-            $remainingattempts = $this->get_remaining_attempts();
-            //debugging('get_state_string: remainingattempts = ' . $remainingattempts);
-            return get_string('triesremaining', 'qbehaviour_interactive', $remainingattempts);
-        }
-    }
-
-    public function init_first_step(question_attempt_step $step, $variant) {
-        parent::init_first_step($step, $variant);
-        //$step->set_behaviour_var('_triesleft', count($this->question->hints) + 1);
+        $remainingattempts = $this->get_remaining_attempts();
+        //debugging('get_state_string: remainingattempts = ' . $remainingattempts);
+        return get_string('triesremaining', 'qbehaviour_interactive', $remainingattempts);
     }
 
     public function process_action(question_attempt_pending_step $pendingstep) {
-        if ($pendingstep->has_behaviour_var('finish')) {
+        if ($pendingstep->has_behaviour_var('comment')) {
+            return $this->process_comment($pendingstep);
+        } else if ($pendingstep->has_behaviour_var('finish')) {
             return $this->process_finish($pendingstep);
-        }
-        if ($this->is_try_again_state()) {
-            if ($pendingstep->has_behaviour_var('tryagain')) {
-                return $this->process_try_again($pendingstep);
-            } else {
-                return question_attempt::DISCARD;
-            }
+        } else if ($pendingstep->has_behaviour_var('submit')) {
+            return $this->process_submit($pendingstep);
         } else {
-            if ($pendingstep->has_behaviour_var('comment')) {
-                return $this->process_comment($pendingstep);
-            } else if ($pendingstep->has_behaviour_var('submit')) {
-                return $this->process_submit($pendingstep);
+            return $this->process_save($pendingstep);
+            /*$response = $pendingstep->get_qt_data();
+            debugging("response :".$response[0]);
+            if (!isset($response[0])) {
+                debugging("entra RESPOSTA VUIDA!!!!!!");
+                //die();
+                return $this->process_next_without_answer($pendingstep);
             } else {
-                return $this->process_save($pendingstep);
+                debugging("entra RESPOSTA PLENA, FA EL SUBMIT!!!!!!");
+                $this->update_question_remaining_attempts(1);
+                return $this->process_submit($pendingstep);
             }
+            //return $this->process_next_without_answer($pendingstep);
+             * 
+             */
         }
     }
 
@@ -163,8 +130,6 @@ const IS_ARCHETYPAL = true;
             return $this->summarise_manual_comment($step);
         } else if ($step->has_behaviour_var('finish')) {
             return $this->summarise_finish($step);
-        } else if ($step->has_behaviour_var('tryagain')) {
-            return get_string('tryagain', 'qbehaviour_interactive');
         } else if ($step->has_behaviour_var('submit')) {
             return $this->summarise_submit($step);
         } else {
@@ -172,8 +137,9 @@ const IS_ARCHETYPAL = true;
         }
     }
 
-    public function process_try_again(question_attempt_pending_step $pendingstep) {
-        $pendingstep->set_state(question_state::$todo);
+    public function process_next_without_answer(question_attempt_pending_step $pendingstep) {
+        $pendingstep->set_state(question_state::$gradedwrong);
+        $pendingstep->set_fraction($this->adjust_fraction(0, $pendingstep));
         return question_attempt::KEEP;
     }
 
@@ -195,6 +161,8 @@ const IS_ARCHETYPAL = true;
                 $this->update_question_remaining_attempts($triesleft - 1);
                 $pendingstep->set_state(question_state::$todo);
             }
+            $pendingstep->set_behaviour_var('_try', $triesleft - 1);
+            $pendingstep->set_behaviour_var('_rawfraction', $fraction);
             $pendingstep->set_new_response_summary($this->question->summarise_response($response));
         }
         return question_attempt::KEEP;
@@ -206,7 +174,7 @@ const IS_ARCHETYPAL = true;
 
         $fraction -= ($totaltries - $triesleft) * $this->get_penalty();
         $fraction = max($fraction, 0);
-        //debugging("fraction = " . $fraction);
+
         return $fraction;
     }
 
@@ -220,6 +188,8 @@ const IS_ARCHETYPAL = true;
             $pendingstep->set_state(question_state::$gaveup);
         } else {
             list($fraction, $state) = $this->question->grade_response($response);
+            $pendingstep->set_behaviour_var('_try', $this->get_remaining_attempts() - 1);
+            $pendingstep->set_behaviour_var('_rawfraction', $fraction);
             $pendingstep->set_fraction($this->adjust_fraction($fraction, $pendingstep));
             $pendingstep->set_state($state);
         }
@@ -227,15 +197,109 @@ const IS_ARCHETYPAL = true;
         return question_attempt::KEEP;
     }
 
+    //NOT USED
     public function process_save(question_attempt_pending_step $pendingstep) {
+        //debugging("in proces saveeeeeeee!!"); 
         $status = parent::process_save($pendingstep);
-        if ($status == question_attempt::KEEP &&
-                $pendingstep->get_state() == question_state::$complete) {
+        $prevgrade = $this->qa->get_fraction();
+        if (!is_null($prevgrade)) {     //ja ha estat puntuada
+            $pendingstep->set_fraction($prevgrade);
             $pendingstep->set_state(question_state::$todo);
+        }else{
+            $this->process_next_without_answer($pendingstep);
         }
+        
         return $status;
     }
-    
+
+    /**
+     * Got the most recently graded step. This is mainly intended for use by the
+     * renderer.
+     * @return question_attempt_step the most recently graded step.
+     */
+    public function get_graded_step() {
+        $step = $this->qa->get_last_step_with_behaviour_var('_try');
+        if ($step->has_behaviour_var('_try')) {
+            return $step;
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Determine whether a question have attempts yet
+     *
+     * @return bool whether have attempts remaining.
+     */
+    public function are_attempts_remaining() {
+        if ($this->get_remaining_attempts() >= 1) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Determine whether a question state represents an "improvable" result,
+     * that is, whether the user can still improve their score.
+     *
+     * @param question_state $state the question state.
+     * @return bool whether the state is improvable
+     */
+    public function is_state_improvable(question_state $state) {
+        return $state == question_state::$todo;
+    }
+
+    /**
+     * @return qbehaviour_extquiz_mark_details the information about the current state-of-play, scoring-wise,
+     * for this adaptive attempt.
+     */
+    public function get_extquiz_marks() {
+
+        // Try to find the last graded step.
+        $gradedstep = $this->get_graded_step();
+        if (is_null($gradedstep) || $this->qa->get_max_mark() == 0) {
+            // No score yet.
+            return new qbehaviour_extquiz_mark_details(question_state::$todo);
+        }
+
+        // Work out the applicable state.
+        if ($this->qa->get_state()->is_commented()) {
+            $state = $this->qa->get_state();
+        } else {
+            $state = question_state::graded_state_for_fraction(
+                            $gradedstep->get_behaviour_var('_rawfraction'));
+        }
+
+        // Prepare the grading details.
+        $details = $this->extquiz_mark_details_from_step($gradedstep, $state, $this->qa->get_max_mark(), $this->get_penalty());
+        $details->improvable = $this->is_state_improvable($this->qa->get_state());
+        return $details;
+    }
+
+    /**
+     * Actually populate the qbehaviour_adaptive_mark_details object.
+     * @param question_attempt_step $gradedstep the step that holds the relevant mark details.
+     * @param question_state $state the state corresponding to $gradedstep.
+     * @param unknown_type $maxmark the maximum mark for this question_attempt.
+     * @param unknown_type $penalty the penalty for this question, as a fraction.
+     */
+    protected function extquiz_mark_details_from_step(question_attempt_step $gradedstep, question_state $state, $maxmark, $penalty) {
+
+        $totaltries = $this->get_num_attempts();
+        $triesleft = $this->get_remaining_attempts();
+
+        $details = new qbehaviour_extquiz_mark_details($state);
+        $details->maxmark = $maxmark;
+        $details->actualmark = $gradedstep->get_fraction() * $details->maxmark;
+        $details->rawmark = $gradedstep->get_behaviour_var('_rawfraction') * $details->maxmark;
+        $details->currentpenalty = $penalty * $details->maxmark;
+        $details->totalpenalty = $details->currentpenalty * ($totaltries - $triesleft);
+        $details->improvable = $this->is_state_improvable($gradedstep->get_state());
+
+        return $details;
+    }
+
     /*
      * ExtendedQuiz methods
      */
@@ -297,6 +361,68 @@ const IS_ARCHETYPAL = true;
         }
 
         return $obj;
+    }
+
+}
+
+/**
+ * This class encapsulates all the information about the current state-of-play
+ * scoring-wise. It is used to communicate between the beahviour and the renderer.
+ *
+ * @copyright  2012 The Open University
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+class qbehaviour_extquiz_mark_details {
+
+    /** @var question_state the current state of the question. */
+    public $state;
+
+    /** @var float the maximum mark for this question. */
+    public $maxmark;
+
+    /** @var float the current mark for this question. */
+    public $actualmark;
+
+    /** @var float the raw mark for this question before penalties were applied. */
+    public $rawmark;
+
+    /** @var float the the amount of additional penalty this attempt attracted. */
+    public $currentpenalty;
+
+    /** @var float the total that will apply to future attempts. */
+    public $totalpenalty;
+
+    /** @var bool whether it is possible for this mark to be improved in future. */
+    public $improvable;
+
+    /**
+     * Constructor.
+     * @param question_state $state
+     */
+    public function __construct($state, $maxmark = null, $actualmark = null, $rawmark = null, $currentpenalty = null, $totalpenalty = null, $improvable = null) {
+        $this->state = $state;
+        $this->maxmark = $maxmark;
+        $this->actualmark = $actualmark;
+        $this->rawmark = $rawmark;
+        $this->currentpenalty = $currentpenalty;
+        $this->totalpenalty = $totalpenalty;
+        $this->improvable = $improvable;
+    }
+
+    /**
+     * Get the marks, formatted to a certain number of decimal places, in the
+     * form required by calls like get_string('gradingdetails', 'qbehaviour_adaptive', $a).
+     * @param int $markdp the number of decimal places required.
+     * @return array ready to substitute into language strings.
+     */
+    public function get_formatted_marks($markdp) {
+        return array(
+            'max' => format_float($this->maxmark, $markdp),
+            'cur' => format_float($this->actualmark, $markdp),
+            'raw' => format_float($this->rawmark, $markdp),
+            'penalty' => format_float($this->currentpenalty, $markdp),
+            'totalpenalty' => format_float($this->totalpenalty, $markdp),
+        );
     }
 
 }

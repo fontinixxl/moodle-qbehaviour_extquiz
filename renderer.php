@@ -1,4 +1,5 @@
 <?php
+
 // This file is part of Moodle - http://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
@@ -23,10 +24,7 @@
  * @copyright  2009 The Open University
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-
 defined('MOODLE_INTERNAL') || die();
-
 
 /**
  * Extquiz behaviour renderer.
@@ -35,30 +33,85 @@ defined('MOODLE_INTERNAL') || die();
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class qbehaviour_extquiz_renderer extends qbehaviour_renderer {
+
     public function controls(question_attempt $qa, question_display_options $options) {
         return $this->submit_button($qa, $options);
     }
 
     public function feedback(question_attempt $qa, question_display_options $options) {
-        if (!$qa->get_state()->is_active() || !$options->readonly) {
+        
+        // If the latest answer was invalid, display an informative message.
+        if ($qa->get_state() == question_state::$invalid) {
+            return html_writer::nonempty_tag('div', $this->disregarded_info(),
+                    array('class' => 'gradingdetails'));
+        }
+        
+        // Otherwise get the details.
+        return $this->render_extquiz_marks(
+                $qa->get_behaviour()->get_extquiz_marks(), $options);
+    }
+
+    /**
+     * Display the scoring information about an extquiz attempt.
+     * @param qbehaviour_extquiz_mark_details contains all the score details we need.
+     * @param question_display_options $options display options.
+     */
+    public function render_extquiz_marks(qbehaviour_extquiz_mark_details $details, question_display_options $options) {
+        if ($details->state == question_state::$todo || $options->marks < question_display_options::MARK_AND_MAX) {
+            // No grades yet.
             return '';
         }
 
-        $attributes = array(
-            'type' => 'submit',
-            'id' => $qa->get_behaviour_field_name('tryagain'),
-            'name' => $qa->get_behaviour_field_name('tryagain'),
-            'value' => get_string('tryagain', 'qbehaviour_interactive'),
-            'class' => 'submit btn',
-        );
-        if ($options->readonly !== qbehaviour_extquiz::READONLY_EXCEPT_TRY_AGAIN) {
-            $attributes['disabled'] = 'disabled';
+        // Display the grading details from the last graded state.
+        $class = $details->state->get_feedback_class();
+        return html_writer::tag('div', get_string($class, 'question'), array('class' => 'correctness ' . $class))
+                . html_writer::tag('div', $this->grading_details($details, $options), array('class' => 'gradingdetails'));
+    }
+
+    /**
+     * Display the information about the penalty calculations.
+     * @param qbehaviour_adaptive_mark_details contains all the score details we need.
+     * @param question_display_options $options display options.
+     * @return string html fragment
+     */
+    protected function grading_details(qbehaviour_extquiz_mark_details $details, question_display_options $options) {
+
+        //$mark = $details->get_formatted_marks($options->markdp);
+        $mark = $details->get_formatted_marks(2);    //prova
+
+        if ($details->currentpenalty == 0 && $details->totalpenalty == 0) {
+            return get_string('gradingdetails', 'qbehaviour_adaptive', $mark);
         }
-        $output = html_writer::empty_tag('input', $attributes);
-        if (empty($attributes['disabled'])) {
-            $this->page->requires->js_init_call('M.core_question_engine.init_submit_button',
-                    array($attributes['id'], $qa->get_slot()));
+
+        $output = '';
+        //debugging("in grading_details" . print_r($details));
+        // Print details of grade adjustment due to penalties
+        if ($details->rawmark != $details->actualmark) {
+            if (!$details->improvable) {
+                return get_string('gradingdetailswithadjustment', 'qbehaviour_adaptive', $mark);
+            } else if ($details->totalpenalty > $details->currentpenalty) {
+                return get_string('gradingdetailswithadjustmenttotalpenalty', 'qbehaviour_adaptive', $mark);
+            } else {
+                return get_string('gradingdetailswithadjustmentpenalty', 'qbehaviour_adaptive', $mark);
+            }
+        } else {
+            if (!$details->improvable) {
+                return get_string('gradingdetails', 'qbehaviour_adaptive', $mark);
+            } else if ($details->totalpenalty > $details->currentpenalty) {
+                return get_string('gradingdetailswithtotalpenalty', 'qbehaviour_adaptive', $mark);
+            } else {
+                return get_string('gradingdetailswithpenalty', 'qbehaviour_adaptive', $mark);
+            }
         }
+
         return $output;
     }
+
+    /**
+     * Display information about a disregarded (incomplete) response.
+     */
+    protected function disregarded_info() {
+        return get_string('disregardedwithoutpenalty', 'qbehaviour_adaptive');
+    }
+
 }

@@ -24,3 +24,10 @@
  */
 
 $string['pluginname'] = 'Extended Quiz Mode';
+$string['disregardedwithoutpenalty'] = 'The submission was invalid, and has been disregarded without penalty.';
+$string['gradingdetails'] = 'Marks for this submission: {$a->cur}/{$a->max}.';
+$string['gradingdetailswithadjustment'] = 'Marks for this submission: {$a->cur}/{$a->max}. Accounting for previous tries, this gives <strong>{$a->cur}/{$a->max}</strong>.';
+$string['gradingdetailswithadjustmentpenalty'] = 'Marks for this submission: {$a->raw}/{$a->max}. Accounting for previous tries, this gives <strong>{$a->cur}/{$a->max}</strong>. This submission attracted a penalty of {$a->penalty}.';
+$string['gradingdetailswithadjustmenttotalpenalty'] = 'Marks for this submission: {$a->raw}/{$a->max}. Accounting for previous tries, this gives <strong>{$a->cur}/{$a->max}</strong>. This submission attracted a penalty of {$a->penalty}. Total penalties so far: {$a->totalpenalty}.';
+$string['gradingdetailswithpenalty'] = 'Marks for this submission: {$a->raw}/{$a->max}. This submission attracted a penalty of {$a->penalty}.';
+$string['gradingdetailswithtotalpenalty'] = 'Marks for this submission: {$a->raw}/{$a->max}. This submission attracted a penalty of {$a->penalty}. Total penalties so far: {$a->totalpenalty}.';
