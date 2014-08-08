@@ -30,9 +30,7 @@
  */
 defined('MOODLE_INTERNAL') || die();
 
-class qbehaviour_extquiz extends question_behaviour_with_save {
-
-    const IS_ARCHETYPAL = true;
+class qbehaviour_extquiz extends question_behaviour_with_multiple_tries {
 
     /**
      * Special value used for {@link question_display_options::$readonly when
