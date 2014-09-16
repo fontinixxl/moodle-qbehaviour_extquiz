@@ -93,7 +93,6 @@ class qbehaviour_extquiz extends question_behaviour_with_multiple_tries {
         }
 
         $remainingattempts = $this->get_remaining_attempts();
-        //debugging('get_state_string: remainingattempts = ' . $remainingattempts);
         return get_string('triesremaining', 'qbehaviour_interactive', $remainingattempts);
     }
 
@@ -181,34 +180,17 @@ class qbehaviour_extquiz extends question_behaviour_with_multiple_tries {
         return question_attempt::KEEP;
     }
 
-    //NOT USED
+
     public function process_save(question_attempt_pending_step $pendingstep) {
         
-        //$status = parent::process_save($pendingstep);
-        //debugging("in proces saveeeeeeee!!, question = ".$this->question->name." state = ".$pendingstep->get_state()); 
         $prevgrade = $this->qa->get_fraction();
         //si la pregunta no estava puntuada (next)
         if(is_null($prevgrade)){
-            //debugging("previous graded NULL");
             $this->process_next_without_answer($pendingstep);
         }else{
-            //list($fraction, $state) = $this->question->grade_response($prevgrade);
-            //die();
             $pendingstep->set_fraction($prevgrade);
             $pendingstep->set_state($this->qa->get_state());
         }
-        //$pendingstep->set_state(question_state::$todo);
-        /*
-        $prevgrade = $this->qa->get_fraction();
-        if (!is_null($prevgrade)) {     //ja ha estat puntuada
-            debugging("prevgraded: with grade = ".$prevgrade);
-            $pendingstep->set_fraction($prevgrade);
-            $pendingstep->set_state(question_state::$todo);
-        }else{
-            debugging("process without answer");
-            $this->process_next_without_answer($pendingstep);
-        }
-        */
         return question_attempt::KEEP;
     }
 
